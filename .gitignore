@@ -1,0 +1,30 @@
+# Environnement & secrets
+.env
+.env.*
+!.env.example
+
+# Environnements virtuels Python
+.venv/
+venv/
+env/
+
+# Base de données locale & logs
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Caches Python & tests
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Éditeurs / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
