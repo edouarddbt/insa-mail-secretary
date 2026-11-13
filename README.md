@@ -209,5 +209,5 @@ sudo systemctl enable --now insa-secretary
 ## Auteurs
 
 - **[@marwangrch](https://github.com/marwangrch)** — Idée originale
-- **[@edouarddbt](https://github.com/edouarddbt)** — Développement & déploiement
+- **[@edouarddbt](https://github.com/edouarddbt)** — Développement
 
