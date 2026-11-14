@@ -731,7 +731,7 @@ class SixNewFeaturesTests(unittest.TestCase):
             finally:
                 store.close()
 
-    def test_auto_archive_newsletter_and_muted_sender_zero_token(self) -> None:
+    def test_newsletter_stays_in_inbox_and_muted_sender_zero_token(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
             settings = _make_settings(db_path)
@@ -743,7 +743,6 @@ class SixNewFeaturesTests(unittest.TestCase):
                     classifier = MailClassifier(settings)
                     notifier = MagicMock()
                     mailbox = MagicMock()
-                    mailbox.ensure_archive_folder.return_value = "Archive"
 
                     msg = EmailMessage()
                     msg["From"] = "Club <club@insa-rouen.fr>"
@@ -765,9 +764,9 @@ class SixNewFeaturesTests(unittest.TestCase):
                     self.assertEqual(processed, 1)
                     # Aucun appel Gemini grâce au mute appris en DB !
                     mock_genai.return_value.models.generate_content.assert_not_called()
-                    # Archivage automatique vers Archive
-                    mailbox.move_emails.assert_called_once_with("INBOX", "Archive", [101])
-                    self.assertEqual(store.get_email_by_uid(101)["current_folder"], "Archive")
+                    # Les newsletters restent dans la boîte de réception (INBOX)
+                    mailbox.move_emails.assert_not_called()
+                    self.assertEqual(store.get_email_by_uid(101)["current_folder"], "INBOX")
             finally:
                 store.close()
 

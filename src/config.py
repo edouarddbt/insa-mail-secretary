@@ -102,7 +102,7 @@ class Settings:
             initial_lookback_hours=int(os.getenv("INITIAL_LOOKBACK_HOURS", "0")),
             max_email_age_hours=int(os.getenv("MAX_EMAIL_AGE_HOURS", "12")),
             auto_archive_newsletters=_parse_bool(
-                os.getenv("AUTO_ARCHIVE_NEWSLETTERS", "true"), default=True
+                os.getenv("AUTO_ARCHIVE_NEWSLETTERS", "false"), default=False
             ),
             archive_folder=os.getenv("ARCHIVE_FOLDER", "").strip(),
             reply_reminder_days=int(os.getenv("REPLY_REMINDER_DAYS", "5")),

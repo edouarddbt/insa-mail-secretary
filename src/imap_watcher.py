@@ -154,11 +154,6 @@ class ImapSecretary:
                 )
 
             current_folder = self.settings.imap_folder
-            if (
-                self.settings.auto_archive_newsletters
-                and classification.category in {"newsletter", "spam"}
-            ):
-                current_folder = self._archive_uid(uid, current_folder)
 
             is_direct_or_action = (
                 classification.category in {"urgent", "important"}
@@ -188,21 +183,6 @@ class ImapSecretary:
             processed_count += 1
 
         return processed_count
-
-    def _archive_uid(self, uid: int, source_folder: str) -> str:
-        """Déplace une newsletter/spam vers le dossier Archive configuré."""
-        try:
-            archive_folder = self.mailbox.ensure_archive_folder(
-                self.settings.archive_folder
-            )
-            if archive_folder.lower() == source_folder.lower():
-                return source_folder
-            self.mailbox.move_emails(source_folder, archive_folder, [uid])
-            logger.info("UID=%d archivé automatiquement -> %s", uid, archive_folder)
-            return archive_folder
-        except Exception as exc:
-            logger.warning("Archivage automatique échoué pour UID=%d: %s", uid, exc)
-            return source_folder
 
     def _find_pending_replies(self) -> list[StoredImportantEmail]:
         """Retourne les mails importants récents restés sans réponse dans Sent."""
