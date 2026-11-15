@@ -57,7 +57,6 @@ class Settings:
     max_email_age_hours: int
     auto_archive_newsletters: bool
     archive_folder: str
-    reply_reminder_days: int
 
     user_context: str
     vip_senders: tuple[str, ...]
@@ -105,7 +104,6 @@ class Settings:
                 os.getenv("AUTO_ARCHIVE_NEWSLETTERS", "false"), default=False
             ),
             archive_folder=os.getenv("ARCHIVE_FOLDER", "").strip(),
-            reply_reminder_days=int(os.getenv("REPLY_REMINDER_DAYS", "5")),
             user_context=os.getenv(
                 "USER_CONTEXT",
                 "Étudiant en 4ème année au département ITI (ITI4) à l'INSA Rouen Normandie.",

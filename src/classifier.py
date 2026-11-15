@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from src.config import Settings
 from src.email_parser import ParsedEmail
-from src.storage import StoredImportantEmail, StoredNewsletter
+from src.storage import StoredNewsletter
 
 logger = logging.getLogger(__name__)
 
@@ -259,63 +259,42 @@ class MailClassifier:
             "[Compléter votre réponse ici]\n\nCordialement,\n[Votre nom]"
         )
 
-    def summarize_digest(
-        self,
-        items: list[StoredNewsletter],
-        pending_replies: list[StoredImportantEmail] | None = None,
-    ) -> str:
-        """Génère le récapitulatif du soir (newsletters + rappels sans réponse)."""
-        pending_replies = pending_replies or []
-        if not items and not pending_replies:
-            return "Aucun mail secondaire ou rappel en attente aujourd'hui."
+    def summarize_digest(self, items: list[StoredNewsletter]) -> str:
+        """Génère le récapitulatif du soir des mails secondaires/newsletters."""
+        if not items:
+            return "Aucun mail secondaire en attente aujourd'hui."
 
-        sections: list[str] = []
-        if items:
-            lines = [
-                f"{idx}. Expéditeur: {item.sender} | Objet: {item.subject} | Résumé: {item.summary}"
-                for idx, item in enumerate(items, start=1)
-            ]
-            joined = "\n".join(lines[:80])
-            prompt = (
-                "Tu es le secrétaire IA de l'utilisateur. Voici les mails secondaires / newsletters reçus aujourd'hui "
-                "qui n'ont pas déclenché de notification en direct.\n"
-                "Rédige un mini récapitulatif clair et agréable en français pour le soir.\n"
-                "Consignes de mise en forme (lecture sur téléphone) :\n"
-                "- Regroupe par petits thèmes avec un emoji et un titre en gras (ex: 🎉 **Campus & Assos**, 📚 **Infos école**, 💼 **Stages / Carrière**).\n"
-                "- Pour chaque mail utile, fais 1 seule puce `- ` très courte (15-25 mots max) avec l'info essentielle et la date/heure.\n"
-                "- Saute une ligne entre chaque puce et entre chaque rubrique pour que ce soit très aéré.\n"
-                "- Fusionne ou ignore les pur spams sans intérêt (en indiquant juste combien ont été ignorés s'il y en a).\n"
-                "- N'utilise PAS de balises HTML : uniquement du texte simple avec `**gras**` et des puces `- `.\n\n"
-                f"Mails du jour ({len(items)} au total) :\n{joined}"
+        lines = [
+            f"{idx}. Expéditeur: {item.sender} | Objet: {item.subject} | Résumé: {item.summary}"
+            for idx, item in enumerate(items, start=1)
+        ]
+        joined = "\n".join(lines[:80])
+        prompt = (
+            "Tu es le secrétaire IA de l'utilisateur. Voici les mails secondaires / newsletters reçus aujourd'hui "
+            "qui n'ont pas déclenché de notification en direct.\n"
+            "Rédige un mini récapitulatif clair et agréable en français pour le soir.\n"
+            "Consignes de mise en forme (lecture sur téléphone) :\n"
+            "- Regroupe par petits thèmes avec un emoji et un titre en gras (ex: 🎉 **Campus & Assos**, 📚 **Infos école**, 💼 **Stages / Carrière**).\n"
+            "- Pour chaque mail utile, fais 1 seule puce `- ` très courte (15-25 mots max) avec l'info essentielle et la date/heure.\n"
+            "- Saute une ligne entre chaque puce et entre chaque rubrique pour que ce soit très aéré.\n"
+            "- Fusionne ou ignore les pur spams sans intérêt (en indiquant juste combien ont été ignorés s'il y en a).\n"
+            "- N'utilise PAS de balises HTML : uniquement du texte simple avec `**gras**` et des puces `- `.\n\n"
+            f"Mails du jour ({len(items)} au total) :\n{joined}"
+        )
+        try:
+            response = self.generate_with_fallback(
+                prompt, {"temperature": 0.2}, prefer_fast=True
             )
-            try:
-                response = self.generate_with_fallback(
-                    prompt, {"temperature": 0.2}, prefer_fast=True
-                )
-                text = (getattr(response, "text", None) or "").strip()
-                if text:
-                    sections.append(text)
-            except Exception as exc:
-                logger.exception("Erreur Gemini lors de la génération du récap : %s", exc)
+            text = (getattr(response, "text", None) or "").strip()
+            if text:
+                return text
+        except Exception as exc:
+            logger.exception("Erreur Gemini lors de la génération du récap : %s", exc)
 
-            if not sections:
-                sections.append(
-                    "\n".join(
-                        f"• **{item.short_title}** ({item.sender})"
-                        for item in items[:30]
-                    )
-                )
-
-        if pending_replies:
-            reminder_lines = ["⏳ **En attente de réponse de ta part**"]
-            for p in pending_replies[:8]:
-                action_hint = f" — _{p.action_required}_" if p.action_required else ""
-                reminder_lines.append(
-                    f"- **{p.subject}** ({p.sender}, reçu le {p.received_at[:10]}){action_hint}"
-                )
-            sections.append("\n".join(reminder_lines))
-
-        return "\n\n".join(sections)
+        return "\n".join(
+            f"• **{item.short_title}** ({item.sender})"
+            for item in items[:30]
+        )
 
     def plan_email_search(self, question: str) -> SearchPlan:
         """Transforme une question libre en mots-clés de recherche IMAP."""

@@ -15,7 +15,7 @@ Assistant personnel **24/7** qui surveille ta boîte mail INSA (`partage.insa-ro
   - **🔕 Silencieux** : mémorise l'expéditeur en base pour ne plus te déranger en direct (sans appel IA).
   - **📅 Google Agenda** : bouton prérempli en 1 clic si une date/échéance est détectée.
 - **Lecture des pièces jointes PDF** : le texte des PDF joints (convocations, règlements, plannings) est extrait automatiquement pour le tri et tes questions.
-- **Silence la journée & récap du soir** : les newsletters et mails secondaires restent dans ta boîte de réception (sans notification en direct) et sont résumés dans un **récapitulatif groupé le soir** (par défaut à `20h00`), avec un rappel des **mails importants restés sans réponse**.
+- **Silence la journée & récap du soir** : les newsletters et mails secondaires restent dans ta boîte de réception (sans notification en direct) et sont résumés dans un **récapitulatif groupé le soir** (par défaut à `20h00`).
 - **Lecture non intrusive (`BODY.PEEK[]`)** : tes mails restent **non lus** sur Partage/Zimbra tant que tu ne cliques pas sur **✅ Lu**.
 - **Bot conversationnel** : pose des questions en langage naturel sur tes mails (*« Est-ce que j'ai reçu un mail de la scolarité ? »*, *« Quels mails attendent une réponse ? »*).
 

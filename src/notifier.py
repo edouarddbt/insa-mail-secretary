@@ -280,26 +280,14 @@ class TelegramNotifier:
         self,
         count: int,
         digest_body: str,
-        pending_count: int = 0,
         preview: bool = False,
     ) -> None:
         """Envoie le récapitulatif quotidien (ou un aperçu anticipé) sur Telegram."""
         title = "👀 <b>Aperçu du récap INSA" if preview else "🌙 <b>Récap du soir INSA"
-        if count > 0 and pending_count > 0:
-            header = (
-                f"{title} ({count} mail{'s' if count > 1 else ''} secondaire{'s' if count > 1 else ''}, "
-                f"{pending_count} sans réponse)</b>\n\n"
-            )
-        elif pending_count > 0:
-            header = (
-                f"{title} ({pending_count} mail{'s' if pending_count > 1 else ''} "
-                f"important{'s' if pending_count > 1 else ''} sans réponse)</b>\n\n"
-            )
-        else:
-            header = (
-                f"{title} ({count} mail{'s' if count > 1 else ''} "
-                f"secondaire{'s' if count > 1 else ''})</b>\n\n"
-            )
+        header = (
+            f"{title} ({count} mail{'s' if count > 1 else ''} "
+            f"secondaire{'s' if count > 1 else ''})</b>\n\n"
+        )
         formatted_body = markdown_to_telegram_html(digest_body)
         self._send_raw(header + formatted_body, disable_notification=False)
 

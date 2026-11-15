@@ -55,7 +55,6 @@ def _make_settings(db_path: Path) -> Settings:
         db_path=db_path,
         auto_archive_newsletters=True,
         archive_folder="",
-        reply_reminder_days=5,
     )
 
 
@@ -770,7 +769,7 @@ class SixNewFeaturesTests(unittest.TestCase):
             finally:
                 store.close()
 
-    def test_pending_reply_reminder_and_db_migration(self) -> None:
+    def test_db_migration_preserves_legacy_schema(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "legacy.db"
             # Crée un ancien schéma sans sender_email / current_folder / is_direct_or_action
@@ -821,51 +820,11 @@ class SixNewFeaturesTests(unittest.TestCase):
                     notified_now=True,
                     digested=True,
                 )
-                store.record_email(
-                    uidvalidity=1,
-                    uid=202,
-                    message_id="<q2@insa-rouen.fr>",
-                    sender="Prof B <profb@insa-rouen.fr>",
-                    sender_email="profb@insa-rouen.fr",
-                    subject="Choix option",
-                    received_at=now_iso,
-                    category="important",
-                    short_title="Choix option",
-                    summary="Quel choix prends-tu ?",
-                    action_required="Répondre",
-                    current_folder="INBOX",
-                    is_direct_or_action=True,
-                    notified_now=True,
-                    digested=True,
-                )
-
-                mailbox = MagicMock()
-                mailbox.find_folder_by_role.return_value = "Sent"
-                mailbox.fetch_recent_emails_since.return_value = (1, [])
-                # Seul le mail <q1> a reçu une réponse
-                mailbox.fetch_sent_reply_metadata.return_value = [
-                    {
-                        "in_reply_to": "<q1@insa-rouen.fr>",
-                        "references": (),
-                        "subject": "Re: Stage PFE",
-                        "to": "profa@insa-rouen.fr",
-                    }
-                ]
-                classifier = MailClassifier(settings)
-                notifier = MagicMock()
-                secretary = ImapSecretary(
-                    settings, store, classifier, notifier, mailbox=mailbox
-                )
-                sent = secretary.maybe_send_daily_digest(force=True)
-                self.assertTrue(sent)
-                notifier.send_daily_digest.assert_called_once()
-                args = notifier.send_daily_digest.call_args.args
-                kwargs = notifier.send_daily_digest.call_args.kwargs
-                self.assertEqual(args[0], 0)
-                self.assertIn("Choix option", args[1])
-                self.assertNotIn("Stage PFE", args[1])
-                self.assertEqual(kwargs.get("pending_count"), 1)
-                self.assertTrue(kwargs.get("preview"))
+                row = store.get_email_by_uid(201)
+                self.assertIsNotNone(row)
+                self.assertEqual(row["subject"], "Stage PFE")
+                self.assertEqual(row["sender_email"], "profa@insa-rouen.fr")
+                self.assertEqual(row["current_folder"], "INBOX")
             finally:
                 store.close()
 
@@ -966,7 +925,7 @@ class SixNewFeaturesTests(unittest.TestCase):
                     action_required=None,
                 )
                 classifier.summarize_digest.side_effect = (
-                    lambda items, pending_replies=None: "\n".join(
+                    lambda items: "\n".join(
                         f"• {it.short_title}" for it in items
                     )
                 )

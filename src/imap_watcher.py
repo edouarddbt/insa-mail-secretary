@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import signal
 import time
 from datetime import datetime, timedelta, timezone
@@ -15,20 +14,9 @@ from src.config import Settings
 from src.email_parser import parse_raw_email
 from src.imap_tools import ImapMailboxTools
 from src.notifier import TelegramNotifier
-from src.storage import StateStore, StoredImportantEmail
+from src.storage import StateStore
 
 logger = logging.getLogger(__name__)
-
-
-def _normalize_subject(subject: str) -> str:
-    """Normalise un objet d'e-mail pour rapprocher une réponse d'un fil."""
-    cleaned = re.sub(
-        r"^(?:(?:re|fwd?|tr|aw)\s*:\s*)+",
-        "",
-        subject.strip(),
-        flags=re.IGNORECASE,
-    )
-    return re.sub(r"\s+", " ", cleaned).strip().lower()
 
 
 class ImapSecretary:
@@ -184,52 +172,6 @@ class ImapSecretary:
 
         return processed_count
 
-    def _find_pending_replies(self) -> list[StoredImportantEmail]:
-        """Retourne les mails importants récents restés sans réponse dans Sent."""
-        if self.settings.reply_reminder_days <= 0:
-            return []
-        candidates = self.store.get_recent_important_candidates(
-            days=self.settings.reply_reminder_days
-        )
-        if not candidates:
-            return []
-
-        try:
-            sent_folder = self.mailbox.find_folder_by_role("sent")
-            if not sent_folder:
-                return []
-            sent_items = self.mailbox.fetch_sent_reply_metadata(
-                sent_folder, days_back=self.settings.reply_reminder_days + 1
-            )
-        except Exception as exc:
-            logger.warning("Vérification du dossier Envoyés impossible: %s", exc)
-            return []
-
-        pending: list[StoredImportantEmail] = []
-        for cand in candidates:
-            if cand.sender_email.lower() == self.settings.imap_user.lower():
-                continue
-            cand_norm_subj = _normalize_subject(cand.subject)
-            cand_email = cand.sender_email.lower()
-            replied = False
-            for sent in sent_items:
-                in_reply_to = str(sent.get("in_reply_to") or "")
-                references = sent.get("references") or ()
-                if cand.message_id and (
-                    cand.message_id == in_reply_to
-                    or cand.message_id in references
-                ):
-                    replied = True
-                    break
-                sent_to = str(sent.get("to") or "").lower()
-                sent_subj = _normalize_subject(str(sent.get("subject") or ""))
-                if cand_email and cand_norm_subj and cand_email in sent_to and cand_norm_subj == sent_subj:
-                    replied = True
-                    break
-            if not replied:
-                pending.append(cand)
-        return pending
-
     def _parse_iso_datetime(self, date_iso: str) -> datetime | None:
         if not date_iso:
             return None
@@ -378,8 +320,7 @@ class ImapSecretary:
             )
         else:
             items = self.store.get_undigested_newsletters()
-        pending_replies = self._find_pending_replies()
-        if not items and not pending_replies:
+        if not items:
             if force or self.settings.digest_send_when_empty:
                 msg = (
                     "Aucun mail reçu depuis hier en attente du récap de ce soir."
@@ -394,25 +335,19 @@ class ImapSecretary:
                 self.store.set_last_digest_date(today_str)
             return False
 
-        digest_text = self.classifier.summarize_digest(
-            items, pending_replies=pending_replies
-        )
-        send_kwargs: dict[str, object] = {}
-        if pending_replies:
-            send_kwargs["pending_count"] = len(pending_replies)
+        digest_text = self.classifier.summarize_digest(items)
         if force:
-            send_kwargs["preview"] = True
-        self.notifier.send_daily_digest(len(items), digest_text, **send_kwargs)
+            self.notifier.send_daily_digest(len(items), digest_text, preview=True)
+        else:
+            self.notifier.send_daily_digest(len(items), digest_text)
 
         if not force:
-            if items:
-                self.store.mark_digested([item.id for item in items])
+            self.store.mark_digested([item.id for item in items])
             self.store.set_last_digest_date(today_str)
         logger.info(
-            "%s envoyé (%d mails, %d relances).",
+            "%s envoyé (%d mails).",
             "Aperçu /recap" if force else "Récap du soir",
             len(items),
-            len(pending_replies),
         )
         return True
 
