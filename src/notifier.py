@@ -25,18 +25,18 @@ def build_google_calendar_url(
     event: CalendarEvent, tz: ZoneInfo | None = None
 ) -> str | None:
     """Construit un lien Google Agenda prérempli à partir d'un CalendarEvent."""
-    title = event.title.strip()
-    start_raw = event.start_iso.strip()
+    title = (event.title or "").strip()
+    start_raw = (event.start_iso or "").strip()
     if not title or not start_raw:
         return None
 
     local_tz = tz or ZoneInfo("Europe/Paris")
     date_only_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    end_raw = (event.end_iso or "").strip()
 
     try:
         if date_only_re.match(start_raw):
             start_day = datetime.strptime(start_raw, "%Y-%m-%d").date()
-            end_raw = event.end_iso.strip()
             if date_only_re.match(end_raw):
                 end_day = datetime.strptime(end_raw, "%Y-%m-%d").date()
                 if end_day <= start_day:
@@ -49,7 +49,6 @@ def build_google_calendar_url(
             if start_dt.tzinfo is None:
                 start_dt = start_dt.replace(tzinfo=local_tz)
             end_dt: datetime | None = None
-            end_raw = event.end_iso.strip()
             if end_raw:
                 try:
                     parsed_end = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
@@ -73,10 +72,12 @@ def build_google_calendar_url(
         "text": title[:180],
         "dates": dates_param,
     }
-    if event.location.strip():
-        params["location"] = event.location.strip()[:180]
-    if event.details.strip():
-        params["details"] = event.details.strip()[:600]
+    location = (event.location or "").strip()
+    details = (event.details or "").strip()
+    if location:
+        params["location"] = location[:180]
+    if details:
+        params["details"] = details[:600]
     return f"https://calendar.google.com/calendar/render?{urlencode(params)}"
 
 
@@ -262,10 +263,14 @@ class TelegramNotifier:
         ]
 
         if classification.calendar_event is not None:
-            cal_url = build_google_calendar_url(classification.calendar_event, tz=tz)
+            try:
+                cal_url = build_google_calendar_url(classification.calendar_event, tz=tz)
+            except Exception as exc:
+                logger.warning("Impossible de générer le lien agenda: %s", exc)
+                cal_url = None
             if cal_url:
-                ev_title = html.escape(classification.calendar_event.title)
-                ev_start = html.escape(classification.calendar_event.start_iso)
+                ev_title = html.escape(classification.calendar_event.title or "")
+                ev_start = html.escape(classification.calendar_event.start_iso or "")
                 lines.append("")
                 lines.append(f"📅 <b>Événement :</b> {ev_title} ({ev_start})")
                 keyboard.append([{"text": "📅 Google Agenda", "url": cal_url}])

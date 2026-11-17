@@ -164,20 +164,41 @@ class MailClassifier:
                 calendar_event=None,
             )
 
+        if not raise_on_error and mail.subject.lstrip().upper().startswith("[SPAM]"):
+            snippet = (mail.body_text or mail.subject).splitlines()[0][:180]
+            return EmailClassification(
+                category="spam",
+                notify_now=False,
+                short_title=mail.subject[:80],
+                summary=snippet,
+                action_required=None,
+                calendar_event=None,
+            )
+
         is_vip = _matches_rule(mail.sender_email, self.settings.vip_senders)
         addressed_directly = self.settings.imap_user.lower() in mail.to_addrs
 
         prompt = (
             "Tu es un secrétaire personnel intelligent qui trie les emails universitaires.\n"
             f"Contexte sur l'utilisateur : {self.settings.user_context}\n\n"
-            "Règles de décision :\n"
-            "- Classe en 'urgent' ou 'important' (avec notify_now=true) tout message d'un professeur, "
-            "de la scolarité, de l'administration concernant directement l'étudiant, d'un encadrant de stage/alternance, "
-            "d'un camarade/projet, une convocation, une modification de cours/examen, ou un mail adressé personnellement.\n"
-            "- Classe en 'newsletter' (avec notify_now=false) les annonces générales de campus, associations étudiantes, "
-            "BDE, conférences ouvertes à tous, offres d'emploi génériques, infolettres.\n"
-            "- Classe en 'spam' (avec notify_now=false) les démarchages commerciaux ou bruits inutiles.\n"
-            "- En cas de doute sur un potentiel impact scolaire/administratif, privilégie notify_now=true.\n"
+            "Règles de décision TRÈS IMPORTANTES :\n"
+            "- ATTENTION aux listes de diffusion institutionnelles (`etudiants@insa-rouen.fr`, `iti4@insa-rouen.fr`, etc.) : "
+            "les professeurs, la Direction et la scolarité utilisent ces listes. La présence d'en-têtes `liste de diffusion = oui` "
+            "NE VEUT PAS DIRE que c'est une newsletter ! Juge toujours selon le CONTENU réel du mail.\n"
+            "- Classe en 'urgent' ou 'important' (avec notify_now=true) :\n"
+            "  1. Toute décision ou annonce officielle de la Direction / Présidence / Administration / Scolarité ayant un impact "
+            "sur les cours ou le campus : passage en distanciel, abrogation du distanciel, reprise des enseignements en présentiel, "
+            "blocage/fermeture de l'établissement, consignes de sécurité, examens, calendrier.\n"
+            "  2. Tout message de professeur, responsable de département/année ou sur la liste de promo (`[iti4]`, etc.) concernant "
+            "un cours, une annulation/report de cours, un lien Zoom/visio, un changement de salle, un examen, un MOOC/deadline, "
+            "une réunion obligatoire, un stage ou une alternance.\n"
+            "  3. Tout mail adressé personnellement à l'utilisateur, convocation, message d'encadrant ou de camarade de projet.\n"
+            "- Classe en 'newsletter' (avec notify_now=false) UNIQUEMENT les communications facultatives/secondaires : "
+            "associations étudiantes, BDE, vie associative, événements culturels/sportifs optionnels, conférences ouvertes non obligatoires, "
+            "offres d'emploi génériques, infolettres.\n"
+            "- Classe en 'spam' (avec notify_now=false) les démarchages commerciaux, mails marqués [SPAM] ou bruits inutiles.\n"
+            "- En cas de doute sur un impact scolaire, pédagogique ou administratif (notamment organisation des cours/présentiel/distanciel), "
+            "privilégie TOUJOURS important/urgent avec notify_now=true.\n"
             "- Si le mail contient une date précise d'examen, de réunion, de soutenance ou une deadline, remplis `calendar_event`.\n\n"
             "Métadonnées du mail :\n"
             f"- Expéditeur : {mail.sender_display}\n"

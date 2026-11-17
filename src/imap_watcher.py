@@ -136,10 +136,20 @@ class ImapSecretary:
                 classification.short_title,
             )
 
+            notified_ok = False
             if classification.notify_now:
-                self.notifier.send_urgent_alert(
-                    mail, classification, tz=self.settings.timezone
-                )
+                try:
+                    self.notifier.send_urgent_alert(
+                        mail, classification, tz=self.settings.timezone
+                    )
+                    notified_ok = True
+                except Exception as exc:
+                    logger.exception(
+                        "Échec envoi alerte Telegram pour UID=%d (%s) — mail enregistré pour éviter une boucle Gemini: %s",
+                        uid,
+                        mail.subject,
+                        exc,
+                    )
 
             current_folder = self.settings.imap_folder
 
@@ -164,8 +174,8 @@ class ImapSecretary:
                 action_required=classification.action_required,
                 current_folder=current_folder,
                 is_direct_or_action=is_direct_or_action,
-                notified_now=classification.notify_now,
-                digested=classification.notify_now,
+                notified_now=notified_ok,
+                digested=notified_ok,
             )
             self.store.set_last_uid(uidvalidity, uid)
             processed_count += 1

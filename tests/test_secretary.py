@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from src.bot_assistant import MailSearchService, PendingMoveAction, TelegramAssistantLoop
 from src.classifier import CalendarEvent, EmailClassification, MailClassifier
 from src.config import Settings
-from src.email_parser import html_to_text, parse_raw_email
+from src.email_parser import ParsedEmail, html_to_text, parse_raw_email
 from src.imap_tools import ImapMailboxTools, to_ascii_term
 from src.imap_watcher import ImapSecretary
 from src.notifier import (
@@ -1104,6 +1104,79 @@ class SixNewFeaturesTests(unittest.TestCase):
                     called_models,
                     ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash-lite"],
                 )
+
+    def test_calendar_url_handles_none_fields_and_send_failure_does_not_loop(self) -> None:
+        ev = CalendarEvent(
+            title="Fermeture MOOC",
+            start_iso="2026-11-22T23:59:00",
+            end_iso=None,
+            location=None,
+            details=None,
+        )
+        url = build_google_calendar_url(ev, tz=ZoneInfo("Europe/Paris"))
+        self.assertIsNotNone(url)
+        self.assertIn("Fermeture+MOOC", url or "")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            settings = _make_settings(db_path)
+            store = StateStore(db_path)
+            try:
+                store.set_last_uid(1, 5603)
+                msg = EmailMessage()
+                msg["From"] = "Prof <prof@insa-rouen.fr>"
+                msg["To"] = "etudiant@insa-rouen.fr"
+                msg["Subject"] = "Fermeture MOOC"
+                msg["Message-ID"] = "<5604@insa-rouen.fr>"
+                msg["Date"] = format_datetime(datetime.now(settings.timezone))
+                msg.set_content("Pensez à finir le MOOC.")
+                raw_bytes = msg.as_bytes()
+
+                client = MagicMock()
+                client.search.return_value = [5604]
+                client.fetch.return_value = {5604: {b"BODY[]": raw_bytes}}
+                classifier = MagicMock()
+                classifier.classify.return_value = EmailClassification(
+                    category="important",
+                    notify_now=True,
+                    short_title="Fermeture MOOC",
+                    summary="Finir le MOOC.",
+                    calendar_event=ev,
+                )
+                notifier = MagicMock()
+                notifier.send_urgent_alert.side_effect = RuntimeError("Telegram glitch")
+                secretary = ImapSecretary(
+                    settings, store, classifier, notifier, mailbox=MagicMock()
+                )
+                processed = secretary.process_new_messages(client, 1)
+                self.assertEqual(processed, 1)
+                self.assertEqual(store.get_last_uid(1), 5604)
+                self.assertTrue(store.is_already_processed(1, 5604, "<5604@insa-rouen.fr>"))
+            finally:
+                store.close()
+
+    def test_spam_subject_prefix_skips_gemini(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            settings = _make_settings(Path(tmpdir) / "test.db")
+            with patch("src.classifier.genai.Client") as mock_client_cls:
+                clf = MailClassifier(settings)
+                mail = ParsedEmail(
+                    uid=5576,
+                    message_id="<5576@tuni.fi>",
+                    sender_name="",
+                    sender_email="noreply@tuni.fi",
+                    to_addrs=("etudiant@insa-rouen.fr",),
+                    cc_addrs=(),
+                    subject="[SPAM] Tervetuloa Tampereen",
+                    date_iso=datetime.now(settings.timezone).isoformat(),
+                    body_text="Message automatique",
+                    is_bulk_list=False,
+                    list_id=None,
+                )
+                res = clf.classify(mail)
+                self.assertEqual(res.category, "spam")
+                self.assertFalse(res.notify_now)
+                mock_client_cls.return_value.models.generate_content.assert_not_called()
 
 
 if __name__ == "__main__":
